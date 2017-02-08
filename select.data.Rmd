@@ -1,0 +1,29 @@
+---
+title: "Apply Leo's Estimator"
+author: "Marcelo Ferreira da Costa Gomes"
+date: "3 de fevereiro de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading data
+
+We'll use dengue data from Rio de Janeiro Municipality from 2012 to 2016, taken from the DENGEON database.
+```{r, warning=FALSE, message=FALSE}
+library(foreign)
+flist <- list.files('./data/', full.names = T)
+target.cols <- c('ID_MUNICIP', 'DT_NOTIFIC', 'DT_DIGITA', 'NU_NOTIFIC')
+df <- read.dbf(flist[1])[, target.cols]
+for (fname in flist[2:length(flist)]){
+  df <- rbind(df, read.dbf(fname)[, target.cols])
+}
+```
+
+Clean data and save object:
+```{r}
+df.clean <- dropleves(df[df$ID_MUNICIP == 330455 & !is.na(df$DT_NOTIFIC) & !is.na(df$DT_DIGITA) & !duplicated(df), ])
+saveRDS(df.clean[, c('ID_MUNICIP', 'DT_NOTIFIC', 'DT_DIGITA')], './data/munRJ_2012-2016.rds')
+```

@@ -1,0 +1,78 @@
+---
+title: "Apply Leo's Estimator to Rio de Janeiro Municipality"
+author: "Marcelo Ferreira da Costa Gomes"
+date: "3 de fevereiro de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read data
+
+The necessary data, already cleaned, is store in dengue.munRJ.2012.2016.rds
+```{r}
+df <- readRDS('./data/dengue.munRJ.2012.2016.epiyearweek.rds')
+names(df)
+head(df)
+```
+
+The data corresponds to notification of suspected dengue cases registered in the municipality of Rio de Janeiro, from Jan/2012 up to Dec/2016:
+```{r}
+min(df$dt_notific)
+max(df$dt_notific)
+```
+
+In order to simulate the usage of the estimator in this historical data, we will recursively provide it with data snapshots restricted to notifications digitized up to the week we are estimating. This process reproduces the usage of estimators on the InfoDengue surveillance tools where, for every week, a situation level is depicted based on the previous epidemiological week data. That is, on epidemiological week 2012W01, we use historical data digitized up to week 2011W52 to generate the situation report.
+The function recursively.apply.leos.method was built with that in mind. All it needs is a the historical data and the list of epidemiological weeks on which to perform the method.
+
+We will apply this framework on every Monday, starting on 2012-06-06, the first Monday of June. Since the previous epidemiological week is 2012W22, we have 21 weeks prior to starting to generate estimates.
+
+Function previous.epiyearweek.from.date returns the Brazilian epidemiological week prior to the one corresponding to a given date. We will use this function to convert from calendar date to the corresponding epidemiological weeks to apply the method.
+Both functions are available from Leo's Opportunity Estimator package.
+
+```{r, message=FALSE}
+library(leos.opportunity.estimator)
+start_date <- '2012-06-04'
+end_date <- '2016-12-31'
+date_list <- seq.Date(as.Date(start_date), as.Date(end_date), by='7 days')
+
+# Convert list of Mondays to the correpsonding list of Brazilian epidemiological weeks
+epiyearweek.list <- mapply(previous.epiyearweek.from.date, date_list)
+
+# Change a few column names to the expected ones on the method
+# This is not mandatory, but will speed it up
+names(df)[1] <- 'NM_MUNICIP'
+names(df) <- sub("^dt_notific", "DT_NOTIFIC", names(df))
+names(df) <- sub("^dt_digita", "DT_DIGITA", names(df))
+names(df)
+
+# Apply Leo's Method recursively over list of epi. weeks, distributing the load in the available cores:
+n <- 3
+splited.list <- split(epiyearweek.list, ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
+res <- mclapply(X=splited.list, FUN=function(y) recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
+                                                                              quantile.target=0.95), mc.cores = n)
+estimated.data.frame <- res[[1]]$estimated.data.frame
+delay.cutoff <- res[[1]]$delay.cutoff
+
+for (i in 2:n){
+  first.epiyearweek <- min(splited.list[[i]])
+  last.epiyearweek <- max(splited.list[[i]])
+  
+  tmp.res <- res[[i]]$estimated.data.frame
+  left.cols <- (estimated.data.frame$DT_NOTIFIC_epiyearweek >= first.epiyearweek &
+                estimated.data.frame$DT_NOTIFIC_epiyearweek <= last.epiyearweek)
+  right.cols <- (tmp.res$DT_NOTIFIC_epiyearweek >= first.epiyearweek &
+                 tmp.res$DT_NOTIFIC_epiyearweek <= last.epiyearweek)
+  estimated.data.frame[left.cols, ] <- tmp.res[right.cols, ]
+  
+  delay.cutoff <- rbind(delay.cutoff, res[[i]]$delay.cutoff)
+}
+```
+
+Save output to disk:
+```{r}
+saveRDS(estimated.data.frame, file='data/leosmethod.estimates.rds')
+saveRDS(delay.cutoff, file='data/leosmethod.delay.cutoff.rds')
+```
