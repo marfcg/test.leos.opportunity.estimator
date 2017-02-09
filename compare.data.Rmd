@@ -1,0 +1,80 @@
+---
+title: "Compare DBF and server data for Rio de Janeiro Municipality"
+author: "Marcelo Ferreira da Costa Gomes"
+date: "3 de fevereiro de 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading data
+
+We'll use dengue data from Rio de Janeiro Municipality from 2012 to 2016, taken from the DENGEON database.
+```{r, warning=FALSE, message=FALSE}
+library(foreign)
+flist <- list.files('./data/', pattern='*.dbf', full.names = T)
+df.dbf <- read.dbf(flist[1], as.is=T)
+geocod <- 330455
+for (fname in flist[2:(length(flist)-1)]){
+  df.dbf <- rbind(df.dbf, read.dbf(fname, as.is=T))
+}
+df.dbf <- df.dbf[df.dbf$ID_MUNICIP == geocod, ]
+df.dbf2016 <- read.dbf(flist[length(flist)], as.is=T)
+df.dbf2016 <- df.dbf2016[df.dbf2016$ID_MUNICIP == geocod, ]
+all(names(df.dbf2016) %in% names(df.dbf))
+```
+
+The dataset from 2016 have different set of columns than those from 2012-2015.
+Filter by list of columns of interest, append datasets and drop possible duplicates:
+```{r}
+filter.cols <- c('NU_NOTIFIC', 'ID_MUNICIP', 'ID_UNIDADE', 'DT_NOTIFIC')
+df.dbf.clean <- df.dbf[, c(filter.cols, 'DT_DIGITA')]
+df.dbf2016.clean <- df.dbf2016[, c(filter.cols, 'DT_DIGITA')]
+all(names(df.dbf2016.clean) %in% names(df.dbf.clean))
+df.dbf.clean <- rbind(df.dbf.clean, df.dbf2016.clean)
+
+nrow(df.dbf.clean[duplicated(df.dbf.clean[, filter.cols]), ])
+```
+We can see above that there are no duplicates in the DBFs.
+
+Read data downloaded from server:
+```{r}
+df.server <- readRDS('data/dengue.munRJ.2012.2016.v2.rds')
+names(df.server)
+filter.cols <- c('municipio_geocodigo', 'nu_notific', 'dt_notific')
+
+nrow(df.server[duplicated(df.server[, filter.cols]), ])
+```
+This particular dataset have already been cleaned of duplicates regarding those columns, as well as against rows with empty digitization date.
+
+
+Compare datasets:
+```{r}
+nrow(df.dbf.clean) - nrow(df.server)
+
+summary(df.dbf.clean$DT_NOTIFIC)
+summary(df.server$dt_notific)
+
+summary(df.dbf.clean$DT_DIGITA)
+summary(df.server$dt_digita)
+```
+
+As seen from the tests above, there are a few discrepancies between the datasets, such as the presence of NA in DT_DIGITA on the dbf and the last input in the server is more recent then that on the dbf. The data from the server has already been filtered regarding NAs, we must do the same in the dbf and discard data entered after 2017-02-01 in order to have a proper comparison.
+Unfortunalely, even after those procedures we still have more entries in the server than in the dbf's.
+In fact, the difference is even bigger now.
+```{r}
+df.dbf.clean <- df.dbf.clean[!is.na(df.dbf.clean$DT_DIGITA), ]
+df.server <- df.server[df.server$dt_digita <= '2017-02-01', ]
+
+nrow(df.dbf.clean) - nrow(df.server)
+
+summary(df.dbf.clean$DT_NOTIFIC)
+summary(df.server$dt_notific)
+
+summary(df.dbf.clean$DT_DIGITA)
+summary(df.server$dt_digita)
+```
