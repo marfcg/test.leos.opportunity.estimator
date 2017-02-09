@@ -14,16 +14,31 @@ knitr::opts_chunk$set(echo = TRUE)
 We'll use dengue data from Rio de Janeiro Municipality from 2012 to 2016, taken from the DENGEON database.
 ```{r, warning=FALSE, message=FALSE}
 library(foreign)
-flist <- list.files('./data/', full.names = T)
-target.cols <- c('ID_MUNICIP', 'DT_NOTIFIC', 'DT_DIGITA', 'NU_NOTIFIC')
-df <- read.dbf(flist[1])[, target.cols]
-for (fname in flist[2:length(flist)]){
-  df <- rbind(df, read.dbf(fname)[, target.cols])
+flist <- list.files('./data/', pattern='*.dbf', full.names = T)
+df.dbf <- read.dbf(flist[1])
+for (fname in flist[2:(length(flist)-1)]){
+  df.dbf <- rbind(df.dbf, read.dbf(fname))
 }
+df.dbf <- df.dbf[df.dbf$ID_MUNICIP == geocod, ]
 ```
 
-Clean data and save object:
+List of columns in data set:
 ```{r}
-df.clean <- dropleves(df[df$ID_MUNICIP == 330455 & !is.na(df$DT_NOTIFIC) & !is.na(df$DT_DIGITA) & !duplicated(df), ])
-saveRDS(df.clean[, c('ID_MUNICIP', 'DT_NOTIFIC', 'DT_DIGITA')], './data/munRJ_2012-2016.rds')
+names(df.dbf)
 ```
+
+Filter by list of columns of interest and drop possible duplicates:
+```{r}
+filter.cols <- c('NU_NOTIFIC', 'ID_MUNICIP', 'ID_UNIDADE', 'DT_NOTIFIC')
+df.dbf.clean <- df.dbf[, c(filter.cols, 'DT_DIGITA')]
+nrow(df.dbf.clean[duplicated(df.dbf.clean[, filter.cols]), ])
+```
+
+Read data downloaded from server:
+```{r}
+df.server <- readRDS('data/dengue.munRJ.2012.2016.v2.rds')
+names(df.server)
+names(df.server)[2:ncol(df.server)] <- c('DT_NOTIFIC', 'DT_DIGITA', 'NU_NOTIFIC')
+```
+
+Create 
