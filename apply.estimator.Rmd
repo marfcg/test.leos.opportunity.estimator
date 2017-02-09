@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The necessary data, already cleaned, is store in dengue.munRJ.2012.2016.rds
 ```{r}
-df <- readRDS('./data/dengue.munRJ.2012.2016.epiyearweek.rds')
+df <- readRDS('./data/dengue.munRJ.dbf.2012.2016.epiyearweek.rds')
 names(df)
 head(df)
 ```

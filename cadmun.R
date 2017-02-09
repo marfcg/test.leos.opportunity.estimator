@@ -1,46 +1,29 @@
-require(stringr)
-require(foreign)
 
-fsplit <- function(x,y,z){
-  municipio_geocode <- y
-  ID_MUNICIP <- x
-  if (is.na(z)){
-    return(data.frame(municipio_geocode, ID_MUNICIP, stringsAsFactors=F))
-  }
-  
-  vals <- strsplit(z, ',')
-  for (v in vals[[1]][2:length(vals[[1]])]){
-    if (v == str_pad('', 6, pad=' ')){
-      next
-    }
-    
-    if (grepl('-', v)){
-      v.list <- strsplit(v, '-')
-      for (vi in v.list[[1]][1]:v.list[[1]][2]){
-        municipio_geocode <- c(municipio_geocode, y)
-        ID_MUNICIP <- c(ID_MUNICIP, sprintf("%06d", vi))
-      }
-    } else {
-      municipio_geocode <- c(municipio_geocode, y)
-      ID_MUNICIP <- c(ID_MUNICIP, sprintf("%06s", v))
-    }
-  }
-  return(list(municipio_geocode=municipio_geocode, ID_MUNICIP=ID_MUNICIP))
-}
+source('colsplit.cadmun.R')
 
-df <- read.dbf('data/cadmun/CADMUN.DBF')[, c('MUNCODDV', 'MUNCOD', 'MUNSINON')]
-for (c in col(df)){
+# Read data and remove extinct and transfered Municipalities
+df <- read.csv('data/cadmun/cadmun-utf8.csv', stringsAsFactors=F, encoding = 'UTF-8')
+df <- droplevels(df[!(df$SITUACAO=='EXTIN' | df$SITUACAO=='TRANS'), ])
+
+# Convert columns of interest for colsplit.cadmun into type character
+target.cols <- c('MUNCODDV', 'MUNCOD', 'MUNSINON')
+for (c in target.cols){
   df[, c] <- as.character(df[, c])
 }
 
+# Entries without comma in MUNSINON column have single correspondence, with ID_MUNICIP corresponding to MUNCOD
 full.list <- df[!grepl(',', df$MUNSINON), c('MUNCODDV', 'MUNCOD')]
-names(full.list)
+
+# Change column names to our liking:
 names(full.list) <- c('municipio_geocode', 'ID_MUNICIP')
 
+# Slice data frame keeping rows with multiple values in MUNSINON:
 df.multiple <- df[grepl(',', df$MUNSINON), ]
 
-res <- mapply(fsplit, df.multiple$MUNCOD, df.multiple$MUNCODDV, df.multiple$MUNSINON)
+# Apply colsplit.cadmun
+res <- mapply(colsplit.cadmun, df.multiple$MUNCOD, df.multiple$MUNCODDV, df.multiple$MUNSINON)
 
+# Generate list correspondence from output
 i <- 1
 municipio_geocode <- unlist(res[[1,i]])
 ID_MUNICIP <- res[[2,i]]
@@ -49,12 +32,18 @@ for (i in 2:dim(res)[[2]]){
   ID_MUNICIP <- c(ID_MUNICIP, res[[2,i]])
 }
 
+# Append to output data frame
 full.list <- rbind(full.list, data.frame(municipio_geocode, ID_MUNICIP, stringsAsFactors=F))
-saveRDS(full.list, 'data/cadmun/ID_MUNICIP2municipio_geocode.rds')
-write.csv(full.list, 'data/cadmun/ID_MUNICIP2municipio_geocode.csv', row.names=F)
-tmp <- full.list[duplicated(full.list$ID_MUNICIP), ]
-head(tmp)
-full.list[full.list$ID_MUNICIP==431453, ]
-df[df$MUNCOD==431453, ]
-df[df$MUNCODDV==4314530, ]
-df[df$MUNCODDV==4314548, ]
+
+# Add informative columns from original data frame
+full.list <- merge(full.list, df[, -which(names(df) %in% c('MUNCOD', 'MUNSINON', 'MUNSINONDV'))],
+                   by.x='municipio_geocode', by.y='MUNCODDV', all.x=TRUE)
+
+# Check for duplicates in ID_MUNICIP column, which must have unique values only:
+if (nrow(full.list[duplicated(full.list$ID_MUNICIP), ]) == 0){
+  print(paste0('Number of duplicated ID_MUNICIP: ', nrow(full.list[duplicated(full.list$ID_MUNICIP), ])))  
+  saveRDS(full.list, 'data/cadmun/ID_MUNICIP2municipio_geocode.rds')
+  write.csv(full.list, 'data/cadmun/ID_MUNICIP2municipio_geocode.csv', row.names=F)
+} else {
+  stop(paste0('Number of duplicated ID_MUNICIP: ', nrow(full.list[duplicated(full.list$ID_MUNICIP), ])))
+}
