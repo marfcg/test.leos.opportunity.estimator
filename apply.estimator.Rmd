@@ -20,8 +20,8 @@ head(df)
 
 The data corresponds to notification of suspected dengue cases registered in the municipality of Rio de Janeiro, from Jan/2012 up to Dec/2016:
 ```{r}
-min(df$dt_notific)
-max(df$dt_notific)
+min(df$DT_NOTIFIC)
+max(df$DT_NOTIFIC)
 ```
 
 In order to simulate the usage of the estimator in this historical data, we will recursively provide it with data snapshots restricted to notifications digitized up to the week we are estimating. This process reproduces the usage of estimators on the InfoDengue surveillance tools where, for every week, a situation level is depicted based on the previous epidemiological week data. That is, on epidemiological week 2012W01, we use historical data digitized up to week 2011W52 to generate the situation report.
@@ -33,7 +33,7 @@ Function previous.epiyearweek.from.date returns the Brazilian epidemiological we
 Both functions are available from Leo's Opportunity Estimator package.
 
 ```{r, message=FALSE}
-library(leos.opportunity.estimator)
+require(leos.opportunity.estimator)
 start_date <- '2012-06-04'
 end_date <- '2016-12-31'
 date_list <- seq.Date(as.Date(start_date), as.Date(end_date), by='7 days')
@@ -43,19 +43,22 @@ epiyearweek.list <- mapply(previous.epiyearweek.from.date, date_list)
 
 # Change a few column names to the expected ones on the method
 # This is not mandatory, but will speed it up
+df <- df[, -which(names(df) %in% c('NU_NOTIFIC', 'ID_UNIDADE'))]
 names(df)[1] <- 'NM_MUNICIP'
-names(df) <- sub("^dt_notific", "DT_NOTIFIC", names(df))
-names(df) <- sub("^dt_digita", "DT_DIGITA", names(df))
 names(df)
 
 # Apply Leo's Method recursively over list of epi. weeks, distributing the load in the available cores:
-n <- 3
-splited.list <- split(epiyearweek.list, ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
-res <- mclapply(X=splited.list, FUN=function(y) recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
-                                                                              quantile.target=0.95), mc.cores = n)
+n <- 7
+splited.list <- split(epiyearweek.list,
+                      ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
+require(parallel)
+res <- mclapply(X=splited.list, FUN=function(y) 
+  recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
+                                quantile.target=0.95),
+  mc.cores = n)
 estimated.data.frame <- res[[1]]$estimated.data.frame
 delay.cutoff <- res[[1]]$delay.cutoff
-
+estimated.epiyearweek <- res[[1]]$estimated.epiyearweek
 for (i in 2:n){
   first.epiyearweek <- min(splited.list[[i]])
   last.epiyearweek <- max(splited.list[[i]])
@@ -68,6 +71,8 @@ for (i in 2:n){
   estimated.data.frame[left.cols, ] <- tmp.res[right.cols, ]
   
   delay.cutoff <- rbind(delay.cutoff, res[[i]]$delay.cutoff)
+  
+  estimated.epiyearweek <- c(estimated.epiyearweek, res[[i]]$estimated.epiyearweek)
 }
 ```
 
@@ -75,4 +80,5 @@ Save output to disk:
 ```{r}
 saveRDS(estimated.data.frame, file='data/leosmethod.estimates.rds')
 saveRDS(delay.cutoff, file='data/leosmethod.delay.cutoff.rds')
+saveRDS(res, file='data/lesomethod.res.rds')
 ```
