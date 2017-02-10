@@ -34,6 +34,7 @@ Both functions are available from Leo's Opportunity Estimator package.
 
 ```{r, message=FALSE}
 require(leos.opportunity.estimator)
+require(parallel)
 start_date <- '2012-06-04'
 end_date <- '2016-12-31'
 date_list <- seq.Date(as.Date(start_date), as.Date(end_date), by='7 days')
@@ -45,20 +46,19 @@ epiyearweek.list <- mapply(previous.epiyearweek.from.date, date_list)
 # This is not mandatory, but will speed it up
 df <- df[, -which(names(df) %in% c('NU_NOTIFIC', 'ID_UNIDADE'))]
 names(df)[1] <- 'NM_MUNICIP'
+names(df) <- sub("^dt_notific", "DT_NOTIFIC", names(df))
+names(df) <- sub("^dt_digita", "DT_DIGITA", names(df))
 names(df)
 
-# Apply Leo's Method recursively over list of epi. weeks, distributing the load in the available cores:
-n <- 7
-splited.list <- split(epiyearweek.list,
-                      ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
-require(parallel)
-res <- mclapply(X=splited.list, FUN=function(y) 
-  recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
-                                quantile.target=0.95),
-  mc.cores = n)
+# Apply Leo's Method recursively over list of epi. weeks, distributing the load in the available cores except one:
+n <- detectCores() - 1
+splited.list <- split(epiyearweek.list, ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
+res <- mclapply(X=splited.list, FUN=function(y) recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
+                                                                              quantile.target=0.95), mc.cores = n)
 estimated.data.frame <- res[[1]]$estimated.data.frame
 delay.cutoff <- res[[1]]$delay.cutoff
-estimated.epiyearweek <- res[[1]]$estimated.epiyearweek
+estimated.epiyearweek.list <- res[[1]]$estimated.epiyearweek.list
+requested.epiyearweek.list <- res[[1]]$requested.epiyearweek.list
 for (i in 2:n){
   first.epiyearweek <- min(splited.list[[i]])
   last.epiyearweek <- max(splited.list[[i]])
@@ -71,14 +71,16 @@ for (i in 2:n){
   estimated.data.frame[left.cols, ] <- tmp.res[right.cols, ]
   
   delay.cutoff <- rbind(delay.cutoff, res[[i]]$delay.cutoff)
-  
-  estimated.epiyearweek <- c(estimated.epiyearweek, res[[i]]$estimated.epiyearweek)
+
+  estimated.epiyearweek.list <- c(estimated.epiyearweek.list, res[[i]]$estimated.epiyearweek.list)
+
+  requested.epiyearweek.list <- c(requested.epiyearweek.list, res[[i]]$requested.epiyearweek.list)
 }
 ```
 
 Save output to disk:
 ```{r}
-saveRDS(estimated.data.frame, file='data/leosmethod.estimates.rds')
-saveRDS(delay.cutoff, file='data/leosmethod.delay.cutoff.rds')
-saveRDS(res, file='data/lesomethod.res.rds')
+today <- Sys.Date()
+saveRDS(estimated.data.frame, file=paste0('data/leosmethod.estimates.',today,'.rds'))
+saveRDS(delay.cutoff, file=paste0('data/leosmethod.delay.cutoff.',today,'.rds'))
 ```
