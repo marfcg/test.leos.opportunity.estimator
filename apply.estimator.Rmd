@@ -53,12 +53,17 @@ names(df)
 # Apply Leo's Method recursively over list of epi. weeks, distributing the load in the available cores except one:
 n <- detectCores() - 1
 splited.list <- split(epiyearweek.list, ceiling(seq_along(epiyearweek.list)/(length(epiyearweek.list)/n)))
-res <- mclapply(X=splited.list, FUN=function(y) recursively.apply.leos.method(df.in=df, epiyearweek.list=y,
-                                                                              quantile.target=0.95), mc.cores = n)
+res <- mclapply(X=splited.list, FUN=function(y) 
+  recursively.apply.leos.method(df.in=df,
+                                epiyearweek.list=y,
+                                quantile.target=0.95),
+  mc.cores = n)
+
 estimated.data.frame <- res[[1]]$estimated.data.frame
 delay.cutoff <- res[[1]]$delay.cutoff
 estimated.epiyearweek.list <- res[[1]]$estimated.epiyearweek.list
 requested.epiyearweek.list <- res[[1]]$requested.epiyearweek.list
+
 for (i in 2:n){
   first.epiyearweek <- min(splited.list[[i]])
   last.epiyearweek <- max(splited.list[[i]])
@@ -83,4 +88,5 @@ Save output to disk:
 today <- Sys.Date()
 saveRDS(estimated.data.frame, file=paste0('data/leosmethod.estimates.',today,'.rds'))
 saveRDS(delay.cutoff, file=paste0('data/leosmethod.delay.cutoff.',today,'.rds'))
+saveRDS(res, file=paste0('data/leosmethod.mclapply.res.',today,'.rds'))
 ```
