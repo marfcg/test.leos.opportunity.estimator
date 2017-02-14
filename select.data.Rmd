@@ -18,12 +18,13 @@ We'll use dengue data from Rio de Janeiro Municipality from 2012 to 2016, taken 
 library(foreign)
 target.cols <- c('NU_NOTIFIC', 'ID_MUNICIP', 'ID_UNIDADE', 'DT_NOTIFIC', 'DT_DIGITA')
 flist <- list.files('./data/', pattern='*.dbf$', full.names = T)
+print(flist)
 df.dbf <- read.dbf(flist[1], as.is=T)[, target.cols]
 for (fname in flist[2:length(flist)]){
   df.dbf <- rbind(df.dbf, read.dbf(fname, as.is=T)[, target.cols])
 }
 geocod <- 330455
-df.dbf <- df.dbf[df.dbf$ID_MUNICIP == geocod, ]
+df.dbf <- droplevels(df.dbf[df.dbf$ID_MUNICIP == geocod, ])
 ```
 
 Filter by list of columns of interest and drop possible duplicates:
@@ -54,6 +55,7 @@ names(df.dbf.clean)
 
 Save data on disk:
 ```{r}
-saveRDS(df.dbf.clean, file='data/dengue.munRJ.dbf.2012.2016.epiyearweek.rds')
-write.csv(df.dbf.clean, file='data/dengue.munRJ.dbf.2012.2016.epiyearweek.csv', row.names=F)
+today <- Sys.Date()
+saveRDS(df.dbf.clean, file=paste0('data/dengue.munRJ.dbf.2012.2016.epiyearweek.', today, '.rds'))
+write.csv(df.dbf.clean, file='data/dengue.munRJ.dbf.2012.2016.epiyearweek.', today, '.csv'), row.names=F)
 ```
