@@ -57,5 +57,5 @@ Save data on disk:
 ```{r}
 today <- Sys.Date()
 saveRDS(df.dbf.clean, file=paste0('data/dengue.munRJ.dbf.2012.2016.epiyearweek.', today, '.rds'))
-write.csv(df.dbf.clean, file='data/dengue.munRJ.dbf.2012.2016.epiyearweek.', today, '.csv'), row.names=F)
+write.csv(df.dbf.clean, file=paste0('data/dengue.munRJ.dbf.2012.2016.epiyearweek.', today, '.csv'), row.names=F)
 ```
